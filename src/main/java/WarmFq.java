@@ -12,20 +12,20 @@ public class WarmFq {
         "http://192.168.1.63:8983/solr/Enterprise_Search_shard1_replica_n1",
         "http://192.168.1.63:8983/solr/Enterprise_Search_shard2_replica_n7",
         "http://192.168.1.64:8983/solr/Enterprise_Search_shard1_replica_n3");
+    AsyncHttpClient asyncHttpClient = asyncHttpClient();
 
     long time = System.currentTimeMillis();
 
     String username = ClientUtils.escapeQueryChars("THE_USER_NAME_GOES_HERE");
 
-    for (String replicaShardUrl : replicaShardUrls) {
-
-      AsyncHttpClient asyncHttpClient = asyncHttpClient();
+    replicaShardUrls.parallelStream().forEach(replicaShardUrl -> {
 
       asyncHttpClient.prepareGet(replicaShardUrl + "/select?q=*:*&rows=0&fq={!join%20from=id%20to=_lw_acl_ss%20fromIndex=acl}{!graph%20from=inbound_ss%20to=outbound_ss}id:" + username)
           .execute();
-    }
+    });
 
     System.out.println("Done - took " + (System.currentTimeMillis() - time));
+
 
 
   }
