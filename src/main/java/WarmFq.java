@@ -4,31 +4,43 @@ import org.apache.solr.client.solrj.util.ClientUtils;
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.Optional;
 
 public class WarmFq {
   public static void main(String [] args) throws Exception {
-    List<String> zkHosts = Arrays.asList("192.168.1.62:9983", "192.168.1.63:9983", "192.168.1.64:9983");
-    String solrChRoot = "/lwfusion/4.1.0/solr";
+    List<String> solrHosts = Arrays.asList("http://192.168.1.62:8983/solr", "http://192.168.1.62:8983", "http://192.168.1.64:8983/solr");
     String collection = "Enterprise_Search";
 
-    String username = ClientUtils.escapeQueryChars("usernamehere");
+    String username = ClientUtils.escapeQueryChars("NA\\DALSNDSZ");
 
-    try (CloudSolrClient solrClient = new CloudSolrClient.Builder(zkHosts, Optional.of(solrChRoot))
-        .withConnectionTimeout(10000)
-        .withSocketTimeout(60000)
-        .build()) {
+    Thread t1 = warmReplica(collection, username, solrHosts.get(0));
+    Thread t2 = warmReplica(collection, username, solrHosts.get(1));
+    Thread t3 = warmReplica(collection, username, solrHosts.get(2));
 
-      long started = System.currentTimeMillis();
-      SolrQuery query = new SolrQuery();
-      query.set("q", "*:*");
-      query.set("fq", "{!join from=id to=_lw_acl_ss fromIndex=acl}{!graph from=inbound_ss to=outbound_ss}id:" + username);
-      query.setRows(0);
-      query.set("shards", "192.168.1.62:8983/solr/Enterprise_Search,192.168.1.63:8983/solr/Enterprise_Search,192.168.1.64:8983/solr/Enterprise_Search");
+    t1.join();
+    t2.join();
+    t3.join();
+  }
 
-      solrClient.query(collection, query);
+  private static Thread warmReplica(String collection, String username, String solrHost) {
+    Thread t = new Thread(() -> {
+      try (CloudSolrClient solrClient = new CloudSolrClient.Builder(Arrays.asList(solrHost))
+          .withConnectionTimeout(10000)
+          .withSocketTimeout(60000)
+          .build()) {
 
-      System.out.println("Finished in " + (System.currentTimeMillis() - started) " ms.");
-    }
+        long started = System.currentTimeMillis();
+        SolrQuery query = new SolrQuery();
+        query.set("q", "*:*");
+        query.set("fq", "{!join from=id to=_lw_acl_ss fromIndex=acl}{!graph from=inbound_ss to=outbound_ss}id:" + username);
+        query.setRows(0);
+        solrClient.query(collection, query);
+
+        System.out.println("Finished in " + (System.currentTimeMillis() - started) +  " ms.");
+      } catch (Exception e) {
+        // Log it
+      }
+    });
+    t.start();
+    return t;
   }
 }
